@@ -4,7 +4,7 @@ var webpack = require("webpack");
 var Clean = require("clean-webpack-plugin");
 var BuildPaths = require("./lib/build-paths");
 var BuildExtension = require("./lib/build-extension-webpack-plugin");
-var ExtractTextPlugin = require("extract-text-webpack-plugin");
+var MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 var manifest = fs.readJSONSync(path.join(BuildPaths.SRC_ROOT, 'manifest.json'));
 var version = manifest.version;
@@ -46,22 +46,32 @@ console.log(entries);
 console.log("\n");
 
 var manifest = {
-  debug: false,
   context: __dirname,
   entry: entries,
-  themes: themes,
+  devtool: 'inline-cheap-source-map',
   output: {
     path: path.join(__dirname, "build/json_viewer/assets"),
     filename: "[name].js"
   },
   module: {
-    loaders: [
-      {test: /\.(css|scss)$/, loader: ExtractTextPlugin.extract("style-loader", "css-loader!sass-loader")}
+    rules: [
+      {
+        test: /\.(css|scss)$/,
+        use: [
+          'style-loader',
+          MiniCssExtractPlugin.loader,
+          'css-loader',
+          'sass-loader'
+        ]
+      }
     ]
   },
   resolve: {
-    extensions: ['', '.js', '.css', '.scss'],
-    root: path.resolve(__dirname, './extension'),
+    extensions: ['.js', '.css', '.scss'],
+    modules: [
+      path.resolve(__dirname, './extension'),
+      "node_modules"
+    ]
   },
   externals: [
     {
@@ -69,23 +79,22 @@ var manifest = {
     }
   ],
   plugins: [
-    new Clean(["build"]),
-    new ExtractTextPlugin("[name].css", {allChunks: true}),
+    new Clean({
+      cleanOnceBeforeBuildPatterns: [path.join(process.cwd(), 'build/**/*')]
+    }),
+    new MiniCssExtractPlugin({
+      filename: "[name].css"
+    }),
     new webpack.DefinePlugin({
       "process.env": {
-        NODE_ENV: JSON.stringify(process.env.NODE_ENV || 'development'),
         VERSION: JSON.stringify(version),
         THEMES: JSON.stringify(themes)
       }
     }),
-    new BuildExtension()
+    new BuildExtension({
+      themes: themes
+    })
   ]
 };
-
-if (process.env.NODE_ENV === 'production') {
-  manifest.plugins.push(new webpack.optimize.UglifyJsPlugin({sourceMap: false}));
-  manifest.plugins.push(new webpack.optimize.DedupePlugin());
-  manifest.plugins.push(new webpack.NoErrorsPlugin());
-}
 
 module.exports = manifest;
